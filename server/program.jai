@@ -667,72 +667,49 @@ get_declarations_from_parent :: (decls: *[..]*Declaration, node: *Node, from_loc
 
 get_declarations :: (file: *Program_File, from_node: *Node = null, from_loc: *Node.Location = null, name := "", only_loaded := false) -> []*Declaration {
     decls: [..]*Declaration;
+    decls.allocator = temp;
 
-    // Globals in all linked files (loaded or imported)
-    if file {
-        for linked_file: file.linked_files {
-            // log("Linked file: %", linked_file.file.path);
+    if !only_loaded {
+        processed: [..]*Program_File;
+        processed.allocator = temp;
 
-            if only_loaded && linked_file.from_import {
+        for server.files {
+            if array_find(processed, it) {
                 continue;
             }
 
-            // -- Global using --
-            // We are accepting usings only from loaded files.
-            // if !linked_file.from_import {
-
-            //     // This is stupid!!
-            //     for linked_file.file.nodes {
-            //         if !is_global(it, file, linked_file.file, linked_file.from_import) {
-            //             continue;
-            //         }
-
-            //         if it.kind != .USING {
-            //             continue;
-            //         }
-
-            //         _using := cast(*Using, it);
-
-            //         if skip_using == _using {
-            //             continue;
-            //         }
-
-            //         if !_using.expression {
-            //             continue;
-            //         }
-
-            //         copied_using := skip_using;
-            //         skip_using = _using;
-
-            //         used_type := get_node_type(_using.expression);
-            //         if !used_type continue;
-
-            //         add_all_fields_of(*decls, used_type, name);
-
-            //         skip_using = copied_using;
-            //     }
-            // }
+            array_add(*processed, it);
 
             // We are searching for specific decl
             if name.count > 0 {
-                for decl: table_find_multiple(*linked_file.file.declarations, name) {
-                    if is_global(decl, file, linked_file.file, linked_file.from_import) array_add(*decls, decl);
+                for decl: table_find_multiple(*it.declarations, name) {
+                    if is_global(decl, file, it, false) {
+                        array_add_if_unique(*decls, decl);
+                    }
                 }
             } else { // We are adding all globals decls
-                for decl: linked_file.file.declarations {
-                    if is_global(decl, file, linked_file.file, linked_file.from_import) array_add(*decls, decl);
+                for decl: it.declarations {
+                    if is_global(decl, file, it, false) {
+                        array_add_if_unique(*decls, decl);
+                    }
                 }
+            }
+        }
+    } else {
+        if name.count > 0 {
+            for decl: table_find_multiple(*file.declarations, name) {
+                array_add_if_unique(*decls, decl);
+            }
+        } else { // We are adding all globals decls
+            for decl: file.declarations {
+                array_add_if_unique(*decls, decl);
             }
         }
     }
 
-    // Scopes, Procedures ... (parents)
-    // if from_block {
-
     if from_node {
         get_declarations_from_parent(*decls, from_node, from_loc, name, false);
     }
-    // }
 
     // @TODO: Maybe deduplicate stuff here? (global stuff vs local shadowing etc)
 
